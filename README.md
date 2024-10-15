@@ -27,7 +27,31 @@ Using example input files
 ```bash
 ./validate.py example/H1N1-2024-04-25-HA-MSA.fasta --oligos example/primers.csv
 ```
-Outputs are `example/primers.csv.html` and `example/primers.csv.out`. For more details, run `./validate.py -h`
+Outputs are `example/primers.csv.html` and `example/primers.csv.out`. 
+```
+usage: validate.py [-h] [--version] [--oligos <string>] [--temperature <float>] [--sodium <float>] [--prefix <string>]
+                   [--threads <int>]
+                   msa-fasta
+
+positional arguments:
+  msa-fasta             Path to the MSA file in FASTA format.
+
+options:
+  -h, --help            show this help message and exit
+  --version, -v         show program's version number and exit
+  --oligos <string>     Optional, path to the CSV (comma-separated values) file of oligo names and sequences. For example, 
+                            H1-F,GTGAATCACTCTCCACAGCA
+                            H1-R,TGATTRGGCCATGAACTTGT
+                            H1-P,TGGAACGTGTTACCCAGGAGA
+  --temperature <float>, -t <float>
+                        Annealing temperature in Degree Celsius [60.0].
+  --sodium <float>, -s <float>
+                        The sum of the concentrations of monovalent ions (Na+, K+, NH4+), in molar [0.18].
+  --prefix <string>, -o <string>
+                        Prefix for output files (.out and .html). If not provided, use --oligos, or the MSA file path.
+  --threads <int>, -p <int>
+                        Number of threads [1].
+```
 
 ### Features to be added to `olivar validate`
 1. Input unaligned sequences in FASTA format, and output an MSA with MAFFT. Ideally, we want to automatically detect if a file is aligned or not. **[PENDING]**
