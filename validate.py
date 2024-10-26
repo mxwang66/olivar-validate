@@ -30,6 +30,7 @@ import numpy as np
 from Bio import SeqIO
 from Bio.SeqUtils import gc_fraction
 from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 from plotly import graph_objects as go
 
@@ -377,7 +378,7 @@ class MSA(object):
     def __init__(self, fasta_path: str, n_cpu: int=1) -> None:
         self.primers = dict()
 
-        logger.info(f'Loading MSA from "{fasta_path}"...')
+        logger.info(f'Loading MSA from {fasta_path} (threads={n_cpu})...')
         tik = time()
         msa = [record.seq for record in SeqIO.parse(fasta_path, 'fasta')]
         # convert to numpy matrix (all characters are converted to uppercase)
@@ -462,7 +463,7 @@ class MSA(object):
     def variant_call(self) -> dict:
         '''Output location and frequencies of variations using the consensus as reference. 
         '''
-        logger.info('Calling variations with the consensus sequence as reference...')
+        logger.info('Calling variations using the consensus sequence as reference...')
         tik = time()
         msa = self.matrix
         ref = self.consensus_array
@@ -684,7 +685,25 @@ class MSA(object):
             fig.write_html(f'{save_path}')
 
 
-def main(msa_path: str, primers_path: str|None=None, temperature: float=60.0, sodium: float=0.18, prefix: str|None=None, n_cpu: int=1) -> None:
+def run_variant_call(msa_path: str, prefix: str|None=None, n_cpu: int=1) -> None:
+    msa = MSA(msa_path, n_cpu)
+    var_dict = msa.variant_call()
+
+    if prefix is None:
+        prefix = msa_path
+    
+    SeqIO.write(
+        SeqRecord(Seq(msa.consensus), id=msa_path, description='consensus sequence'), 
+        prefix+'.consensus.fasta', format='fasta'
+    )
+
+    with open(prefix+'.csv', 'w') as f:
+        f.write('START,STOP,FREQ\n')
+        for pos, freq in var_dict.items():
+            f.write(f'{pos},{pos},{freq}\n')
+
+
+def run_validate(msa_path: str, primers_path: str|None=None, temperature: float=60.0, sodium: float=0.18, prefix: str|None=None, n_cpu: int=1) -> None:
     msa = MSA(msa_path, n_cpu)
     consensus_record = SeqIO.SeqRecord(Seq(msa.consensus), id='consensus', description=f'of {msa.row} sequences')
 
@@ -710,39 +729,70 @@ def main(msa_path: str, primers_path: str|None=None, temperature: float=60.0, so
     msa.plot(prefix+'.html')
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
 
     parser.add_argument('--version', '-v', action='version', version='%(prog)s v' + __version__)
+    subparsers = parser.add_subparsers(dest='subparser_name', help='sub-commands')
 
-    parser.add_argument(
+    # variant call
+    snps_help = 'Input an MSA, output the consensus sequence, as well as a list of the location and frequencies of variations/SNPs, using the consensus as reference'
+    snps_parser = subparsers.add_parser('snps', help=snps_help, description=snps_help)
+    snps_parser.add_argument(
         'msa_path', type=str, metavar='msa-fasta', 
         help='Path to the MSA file in FASTA format.')
-    parser.add_argument(
+    snps_parser.add_argument(
+        '--prefix', '-o', type=str, default=None, metavar='<string>', 
+        help='Prefix for output files (.consensus.fasta and .csv). If not provided, use the MSA file path.')
+    snps_parser.add_argument(
+        '--threads', '-p', type=int, default=1, metavar='<int>', 
+        help='Number of threads [1].')
+
+    # validate
+    validate_help = 'Visualize an MSA, along with its primers/probes (if provided), and validate their alignment and sensitivity.'
+    validate_parser = subparsers.add_parser(
+        'validate', help=validate_help, description=validate_help, formatter_class=argparse.RawTextHelpFormatter
+    )
+    validate_parser.add_argument(
+        'msa_path', type=str, metavar='msa-fasta', 
+        help='Path to the MSA file in FASTA format.')
+    validate_parser.add_argument(
         '--oligos', type=str, default=None, metavar='<string>', 
         help="""Optional, path to the CSV (comma-separated values) file of oligo names and sequences. For example, 
     H1-F,GTGAATCACTCTCCACAGCA
     H1-R,TGATTRGGCCATGAACTTGT
     H1-P,TGGAACGTGTTACCCAGGAGA""")
-    parser.add_argument(
+    validate_parser.add_argument(
         '--temperature', '-t', type=float, default=60, metavar='<float>', 
         help='Annealing temperature in Degree Celsius [60.0].')
-    parser.add_argument(
+    validate_parser.add_argument(
         '--sodium', '-s', type=float, default=0.18, metavar='<float>', 
         help='The sum of the concentrations of monovalent ions (Na+, K+, NH4+), in molar [0.18].')
-    parser.add_argument(
+    validate_parser.add_argument(
         '--prefix', '-o', type=str, default=None, metavar='<string>', 
         help='Prefix for output files (.out and .html). If not provided, use --oligos, or the MSA file path.')
-    parser.add_argument(
+    validate_parser.add_argument(
         '--threads', '-p', type=int, default=1, metavar='<int>', 
         help='Number of threads [1].')
 
     args = parser.parse_args()
-    main(
-        msa_path=args.msa_path, 
-        primers_path=args.oligos, 
-        temperature=args.temperature, 
-        sodium=args.sodium, 
-        prefix=args.prefix, 
-        n_cpu=args.threads
-    )
+
+    if args.subparser_name == 'snps':
+        run_variant_call(
+            msa_path=args.msa_path, 
+            prefix=args.prefix, 
+            n_cpu=args.threads
+        )
+    elif args.subparser_name == 'validate':
+        run_validate(
+            msa_path=args.msa_path, 
+            primers_path=args.oligos, 
+            temperature=args.temperature, 
+            sodium=args.sodium, 
+            prefix=args.prefix, 
+            n_cpu=args.threads
+        )
+    else:
+        print('A sub-command needs to be specified (snps or validate).')
+        print("Use '--help' to print detailed descriptions of command line arguments")
+        
