@@ -31,6 +31,11 @@ conda activate myenv
 ## Usage
 Use one of the sub-commands: `snps` for variant calling for an MSA, `validate` for validating and visualizing primers/probes with an MSA. 
 > [!TIP]
+> You may use `mafft` to make an MSA. `mafft` is already installed if you followed the installation guide. 
+> ```
+> mafft --auto --thread 1 sequences.fasta > MSA.fasta
+> ```
+> 
 > Use the `--threads` or `-p` option for faster processing time. 
 
 ### Variant calling with `snps`
@@ -54,11 +59,6 @@ options:
   --threads <int>, -p <int>
                         Number of threads [1].
 ```
-> [!TIP]
-> You may use `mafft` to make an MSA. `mafft` is already installed if you followed the installation guide. 
-> ```
-> mafft --auto --thread 1 sequences.fasta > MSA.fasta
-> ```
 
 ### Validating and visualizing primers/probes with `validate`
 Using example input files
